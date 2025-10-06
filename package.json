@@ -4,10 +4,11 @@
   "description": "Simple site that prints environment (dev/prod)",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
-    "dev": "ENV=dev node app.js",
-    "prod": "ENV=prod node app.js"
-  },
+  "start": "node app.js",
+  "dev": "ENV=dev node app.js",
+  "prod": "ENV=prod node app.js",
+  "test": "echo \"No tests configured\" && exit 0"
+},
   "author": "",
   "license": "MIT",
   "dependencies": {
