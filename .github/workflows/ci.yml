@@ -7,36 +7,30 @@ on:
     branches: [ "develop" ]
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the repo
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Set up Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      # Step 3: Install dependencies
       - name: Install dependencies
         run: npm install
 
-      # Step 4: Run tests (optional, remove if none)
       - name: Run tests
-        run: |
-          if [ -f package.json ] && jq -e '.scripts.test' package.json > /dev/null; then
-            npm test
-          else
-            echo "No test script found, skipping."
-          fi
+        run: npm test
 
-      # Step 5: Deploy to EC2
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    steps:
       - name: Deploy to Dev EC2
-        if: github.ref == 'refs/heads/develop'
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.DEV_EC2_IP }}
