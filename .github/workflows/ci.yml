@@ -1,13 +1,13 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "develop" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "develop" ]
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,8 +25,30 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # Step 4: Run tests (if you have any)
+      # Step 4: Run tests (optional, remove if none)
       - name: Run tests
-        run: npm test
+        run: |
+          if [ -f package.json ] && jq -e '.scripts.test' package.json > /dev/null; then
+            npm test
+          else
+            echo "No test script found, skipping."
+          fi
 
-      # Step 5: Build app (optional if yo
+      # Step 5: Deploy to EC2
+      - name: Deploy to Dev EC2
+        if: github.ref == 'refs/heads/develop'
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.DEV_EC2_IP }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ec2-user
+            if [ ! -d "env-welcome" ]; then
+              git clone -b develop https://github.com/laiba357/Github-Action-CI-CD-.git env-welcome
+            fi
+            cd env-welcome
+            git fetch --all
+            git reset --hard origin/develop
+            npm install
+            pm2 restart env-welcome-dev || PORT=3000 ENV=dev pm2 start app.js --name env-welcome-dev
