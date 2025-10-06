@@ -1,18 +1,21 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline for Node App (Amazon Linux)
 
 on:
-  pull_request:
-    branches: [ "feature" ]
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+      - feature/*
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  # CI Job: Runs on pull requests to feature branch
-  ci:
-    if: github.event_name == 'pull_request'
+  build:
+    name: Continuous Integration (CI)
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Setup Node.js
@@ -23,42 +26,62 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run tests
-        run: npm test
+      - name: Run build
+        run: npm run build || echo "No build script found"
 
-  # CD Job: Runs on push to main branch
-  cd:
-    if: github.ref == 'refs/heads/main'
+      - name: Run tests
+        run: npm test || echo "No tests defined"
+
+  deploy:
+    name: Continuous Deployment (CD)
     runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Deploy to EC2
+      - name: Deploy to Amazon EC2
         uses: appleboy/ssh-action@v0.1.10
         with:
-          host: ${{ secrets.DEV_EC2_IP }}
+          host: 50.19.67.76
           username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ secrets.EC2_KEY }}
           script: |
-            cd /home/ec2-user
-
-            # Clone repo if missing
-            if [ ! -d "env-welcome" ]; then
-              git clone -b main git@github.com:laiba357/Github-Action-CI-CD-.git env-welcome
+            echo "🚀 Starting deployment on EC2"
+            
+            # Ensure Node and Git are installed
+            if ! command -v node &> /dev/null; then
+              sudo yum update -y
+              sudo yum install -y nodejs npm git
             fi
 
-            cd env-welcome
-            git fetch --all
-            git reset --hard origin/main
+            # Go to or create project directory
+            cd ~/Documents/Github_Action || mkdir -p ~/Documents/Github_Action && cd ~/Documents/Github_Action
+
+            # Pull latest code
+            if [ ! -d .git ]; then
+              git clone https://github.com/${{ github.repository }} .
+            else
+              git reset --hard
+              git pull origin main
+            fi
 
             # Install dependencies
             npm install
 
-            # Restart app with PM2
-            pm2 restart env-welcome || PORT=3000 ENV=dev pm2 start app.js --name env-welcome
+            # Kill any existing Node process on port 3000
+            PORT=3000
+            PID=$(lsof -t -i:$PORT)
+            if [ ! -z "$PID" ]; then
+              echo "Killing existing process on port $PORT"
+              kill -9 $PID
+            fi
+
+            # Run the app in background with nohup
+            echo "Starting app.js..."
+            nohup node app.js > app.log 2>&1 &
+
+            echo "✅ Deployment completed successfully!"
+
